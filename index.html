@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>XO Online</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body {
+      background:#111;
+      color:#eee;
+      font-family:Arial;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      min-height:100vh;
+      text-align:center;
+    }
+    #board {
+      display:grid;
+      grid-template-columns:repeat(3,100px);
+      gap:5px;
+      margin:20px;
+    }
+    .cell {
+      width:100px;
+      height:100px;
+      font-size:48px;
+      background:#222;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:8px;
+      cursor:pointer;
+    }
+    .cell.filled {
+      cursor:not-allowed;
+      opacity:0.6;
+    }
+    button,select,input {
+      margin:5px;
+      padding:6px 12px;
+    }
+    #chatBox {
+      width:320px;
+      height:150px;
+      overflow-y:auto;
+      border:1px solid #444;
+      background:#222;
+      padding:5px;
+      text-align:left;
+      margin-top:10px;
+    }
+    #chatInput {
+      width:240px;
+    }
+  </style>
+</head>
+<body>
+  <h2>XO Online</h2>
+  <div>
+    <button onclick="createRoom()">Create Room</button>
+    <input id="roomInput" placeholder="Room Code">
+    <select id="roleSelect">
+      <option value="spectator">Spectator</option>
+      <option value="x">X</option>
+      <option value="o">O</option>
+    </select>
+    <button onclick="joinRoom()">Join Room</button>
+  </div>
+
+  <div id="status"></div>
+  <div id="board"></div>
+  <button onclick="restart()">Restart</button>
+
+  <!-- Chat -->
+  <div style="margin-top:20px;">
+    <h3>Chat</h3>
+    <div id="chatBox"></div>
+    <input id="chatInput" placeholder="Type a message...">
+    <button onclick="sendMsg()">Send</button>
+  </div>
+
+  <script>
+    const socket=io();
+    let currentRoom=null;
+    let myRole="spectator";
+
+    function createRoom(){
+      socket.emit("create_room",{});
+    }
+    socket.on("room_created",data=>{
+      currentRoom=data.room_id;
+      document.getElementById("status").innerText="New room: "+currentRoom;
+    });
+
+    function joinRoom(){
+      const rid=document.getElementById("roomInput").value.trim();
+      const role=document.getElementById("roleSelect").value;
+      socket.emit("join_room",{room_id:rid, role:role});
+      currentRoom=rid;
+    }
+
+    socket.on("state",data=>{
+      if(data.your_role) myRole=data.your_role;
+      render(data.board);
+      let txt="";
+      if(data.winner){
+        txt = data.winner==="tie" ? "Tie!" : (data.winner.toUpperCase()+" Wins!");
+      } else {
+        txt = "Turn: "+data.turn.toUpperCase();
+      }
+      txt += " | You: "+myRole.toUpperCase();
+      document.getElementById("status").innerText=txt;
+    });
+
+    socket.on("error",data=>{
+      alert(data.msg);
+    });
+
+    function render(board){
+      const div=document.getElementById("board");
+      div.innerHTML="";
+      for(let r=0;r<3;r++){
+        for(let c=0;c<3;c++){
+          const cell=document.createElement("div");
+          cell.className="cell";
+          cell.textContent=board[r][c];
+          if(board[r][c]) cell.classList.add("filled");
+          cell.onclick=()=>{
+            if(myRole===board[r][c]) return;
+            if(myRole && myRole!=="spectator" && board[r][c]===""){
+              socket.emit("move",{room_id:currentRoom,row:r,col:c});
+            }
+          };
+          div.appendChild(cell);
+        }
+      }
+    }
+
+    function restart(){
+      if(currentRoom) socket.emit("restart",{room_id:currentRoom});
+    }
+
+    // ---- Chat ----
+    function sendMsg(){
+      const inp=document.getElementById("chatInput");
+      const msg=inp.value.trim();
+      if(msg && currentRoom){
+        socket.emit("chat_message",{room_id:currentRoom,msg:msg});
+        inp.value="";
+      }
+    }
+    socket.on("chat_message",data=>{
+      const box=document.getElementById("chatBox");
+      const p=document.createElement("div");
+      p.textContent=data.msg;
+      box.appendChild(p);
+      box.scrollTop=box.scrollHeight;
+    });
+  </script>
+</body>
+</html>
