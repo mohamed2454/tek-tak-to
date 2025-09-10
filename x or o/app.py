@@ -1,6 +1,11 @@
 from flask import Flask, render_template, request
 from flask_socketio import SocketIO, emit, join_room
 import random, uuid, string
+import os
+if __name__ == "__main__":
+    socketio = SocketIO(app)
+    port = int(os.environ.get("PORT", 5000))  # يجيب البورت من Render أو يحط 5000 كـ default
+    socketio.run(app, host="0.0.0.0", port=port)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = "secret"
@@ -124,3 +129,4 @@ def restart(data):
 
 if __name__ == "__main__":
     socketio.run(app, host="0.0.0.0", port=5000, debug=True)
+
